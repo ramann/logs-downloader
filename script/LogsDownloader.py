@@ -149,12 +149,20 @@ class LogsDownloader:
                     # we failed to handle the next log file
                     else:
                         self.logger.info("Could not get log file %s. It could be that the log file does not exist yet.", next_file)
+                        self.logger.info("Downloading the index to see if we're trying to download an outdated log file...")
+                        self.logs_file_index.download()
+                        first_file_number_from_index = int(self.logs_file_index.indexed_logs()[0].split("_")[1].rstrip(".log")) # get the first file number from the index
+                        next_file_number = int(next_file.split("_")[1].rstrip(".log"))
+                        if next_file_number < first_file_number_from_index: # compare the first file in the index to the one we are trying to download
+                            self.logger.info("We are trying to download a file that is so old it is no longer available.")
+                            self.logger.info("We are going to empty the LastKnownDownloadedFileId.txt file so that the index is redownloaded.")
+                            self.last_known_downloaded_file_id.update_last_log_id("")
                 except Exception, e:
                         self.logger.error("Failed to download file %s. Error is - %s , %s", next_file, e.message, traceback.format_exc())
             if self.running:
                 # wait for 30 seconds between each iteration
-                self.logger.info("Sleeping for 30 seconds before trying to fetch logs again...")
-                time.sleep(30)
+                self.logger.info("Sleeping for 0 seconds before trying to fetch logs again...")
+                # time.sleep(30)
 
     """
     Scan the logs.index file, and download all the log files in it
@@ -175,6 +183,7 @@ class LogsDownloader:
                         self.last_known_downloaded_file_id.update_last_log_id(log_file_name)
                     else:
                         # skip the file and try to get the next one
+                        # self.last_known_downloaded_file_id.update_last_log_id(log_file_name) # ramann debugging
                         self.logger.warning("Skipping File %s", log_file_name)
         self.logger.info("Completed fetching all the files from the logs files index file")
 
@@ -207,6 +216,7 @@ class LogsDownloader:
                         with open(os.path.join(fail_dir, logfile), "w") as file:
                             file.write(result[1])
                         self.logger.info("Saved file %s locally to the 'fail' folder", logfile)
+                        #return True # ramann debugging
                         break
                 # if the file is not found (could be that it is not generated yet)
                 elif result[0] == "NOT_FOUND" or result[0] == "ERROR":
@@ -416,6 +426,13 @@ class LogsFileIndex:
         # if we got the file content
         if file_content != "":
             content = file_content.decode("utf-8")
+            
+            # ramann debugging
+            # index_file_path = os.path.join("/tmp", "index.txt")
+            # with open(index_file_path, "w") as index_file:
+            #    index_file.write(content)
+            #    index_file.close()
+
             # validate the file format
             if LogsFileIndex.validate_logs_index_file_format(content):
                 self.content = content.splitlines()
